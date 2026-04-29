@@ -25,8 +25,39 @@ header {
     margin: 10px;
 }
 
+/* SIDEBAR */
+.sidebar {
+    width: 80px;
+    background: #ffffff20;
+    border-radius: 15px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
+
+.tool {
+    width: 50px;
+    height: 50px;
+    background: #ffffff30;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 20px;
+    transition: 0.2s;
+    user-select: none;
+}
+
+.tool.active { background: #4cafef; }
+.tool:hover { transform: scale(1.1); }
+
+/* CANVAS */
 .canvas-container {
     flex: 1;
+    margin-left: 10px;
     background: #fff;
     border-radius: 15px;
     overflow: hidden;
@@ -39,6 +70,7 @@ canvas {
     cursor: crosshair;
 }
 
+/* FOOTER */
 .footer {
     margin: 10px;
     display: flex;
@@ -48,11 +80,7 @@ canvas {
     gap: 10px;
 }
 
-/* Palette de couleurs */
-.colors {
-    display: flex;
-    gap: 8px;
-}
+.colors { display: flex; gap: 8px; }
 
 .color {
     width: 30px;
@@ -62,35 +90,40 @@ canvas {
     border: 3px solid transparent;
     transition: transform 0.15s;
 }
-
 .color:hover { transform: scale(1.15); }
 .color.active { border-color: white; }
 
-/* Taille */
-.controls {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
+.controls { display: flex; align-items: center; gap: 10px; }
 
-/* Bouton */
-button {
+.actions { display: flex; gap: 8px; }
+
+.actions button {
     padding: 10px 15px;
     border: none;
     border-radius: 10px;
     cursor: pointer;
     color: white;
     font-weight: bold;
-    background: #6c5ce7;
 }
-button:hover { opacity: 0.85; }
+
+.clear { background: #6c5ce7; }
 </style>
 </head>
 <body>
 
-<header>🎨 DrawApp - Application de Dessin</header>
+<header>🎨 DrawApp - Application de Dessin Avancée</header>
 
 <div class="container">
+
+    <!-- SIDEBAR avec outils -->
+    <div class="sidebar">
+        <div class="tool active" id="brushBtn" title="Pinceau">✏️</div>
+        <div class="tool" id="eraserBtn" title="Gomme">🧽</div>
+        <div class="tool" id="undoBtn" title="Annuler">↩</div>
+        <div class="tool" id="redoBtn" title="Rétablir">↪</div>
+        <div class="tool" id="clearBtn" title="Effacer tout">🗑</div>
+    </div>
+
     <div class="canvas-container">
         <canvas id="canvas"></canvas>
     </div>
@@ -98,18 +131,17 @@ button:hover { opacity: 0.85; }
 
 <div class="footer">
 
-    <!-- Palette -->
     <div class="colors" id="colors"></div>
 
-    <!-- Taille du pinceau -->
     <div class="controls">
         Taille :
         <input type="range" id="size" min="1" max="50" value="5">
         <span id="sizeLabel">5px</span>
     </div>
 
-    <!-- Actions -->
-    <button onclick="clearCanvas()">🆕 Nouveau</button>
+    <div class="actions">
+        <button class="clear" onclick="clearCanvas()">🆕 Nouveau</button>
+    </div>
 
 </div>
 
@@ -125,13 +157,14 @@ resizeCanvas();
 window.addEventListener("resize", resizeCanvas);
 
 let drawing = false;
+let tool = "brush";
 let color = "#000000";
 let size = 5;
 
 ctx.lineCap = "round";
 ctx.lineJoin = "round";
 
-// Palette de couleurs
+// Palette
 const palette = ["#000","#e74c3c","#1abc9c","#9b59b6","#2ecc71","#f39c12","#3498db","#e84393"];
 const colorContainer = document.getElementById("colors");
 let activeColorEl = null;
@@ -147,11 +180,10 @@ palette.forEach(c => {
         activeColorEl = div;
     };
     colorContainer.appendChild(div);
-    // Sélectionner le premier par défaut
     if (c === "#000") { div.classList.add("active"); activeColorEl = div; }
 });
 
-// Taille du pinceau
+// Taille
 const sizeInput = document.getElementById("size");
 const sizeLabel = document.getElementById("sizeLabel");
 sizeInput.oninput = () => {
@@ -169,21 +201,83 @@ function start(x, y) {
 function draw(x, y) {
     if (!drawing) return;
     ctx.lineWidth = size;
-    ctx.strokeStyle = color;
+    ctx.strokeStyle = tool === "eraser" ? "#ffffff" : color;
     ctx.lineTo(x, y);
     ctx.stroke();
 }
 
-function stop() { drawing = false; }
+function stop() {
+    if (drawing) saveState();
+    drawing = false;
+}
 
+// Souris
 canvas.addEventListener("mousedown", e => start(e.offsetX, e.offsetY));
 canvas.addEventListener("mousemove", e => draw(e.offsetX, e.offsetY));
 canvas.addEventListener("mouseup", stop);
 canvas.addEventListener("mouseleave", stop);
 
+// Touch mobile
+canvas.addEventListener("touchstart", e => {
+    e.preventDefault();
+    const r = canvas.getBoundingClientRect();
+    const t = e.touches[0];
+    start(t.clientX - r.left, t.clientY - r.top);
+});
+canvas.addEventListener("touchmove", e => {
+    e.preventDefault();
+    const r = canvas.getBoundingClientRect();
+    const t = e.touches[0];
+    draw(t.clientX - r.left, t.clientY - r.top);
+});
+canvas.addEventListener("touchend", stop);
+
+// Outils
+function setTool(t) {
+    tool = t;
+    document.querySelectorAll(".tool").forEach(b => b.classList.remove("active"));
+    if (t === "brush") document.getElementById("brushBtn").classList.add("active");
+    else document.getElementById("eraserBtn").classList.add("active");
+}
+
+document.getElementById("brushBtn").onclick = () => setTool("brush");
+document.getElementById("eraserBtn").onclick = () => setTool("eraser");
+
+// Historique undo/redo
+let history = [];
+let step = -1;
+
+function saveState() {
+    step++;
+    history = history.slice(0, step);
+    history.push(canvas.toDataURL());
+}
+
+function undo() {
+    if (step > 0) { step--; restore(); }
+}
+
+function redo() {
+    if (step < history.length - 1) { step++; restore(); }
+}
+
+function restore() {
+    let img = new Image();
+    img.src = history[step];
+    img.onload = () => ctx.drawImage(img, 0, 0);
+}
+
+document.getElementById("undoBtn").onclick = undo;
+document.getElementById("redoBtn").onclick = redo;
+document.getElementById("clearBtn").onclick = clearCanvas;
+
 function clearCanvas() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    saveState();
 }
+
+// Init
+saveState();
 </script>
 </body>
 </html>
